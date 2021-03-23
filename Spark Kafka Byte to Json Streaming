@@ -1,0 +1,45 @@
+pyspark --packages org.apache.spark:spark-sql-kafka-0-10_2.11:2.4.0
+
+df = spark.readStream.format("kafka")\
+.option("kafka.bootstrap.servers", "localhost:9092")\
+.option("subscribe", "invoices")\
+.load()
+
+df.writeStream.outputMode("append").format("console").start()
+
+exit()
+
+df = spark.readStream.format("kafka")\
+.option("kafka.bootstrap.servers", "localhost:9092")\
+.option("subscribe", "invoices")\
+.load()
+
+dfDeserialized = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructField, StructType, IntegerType, StringType,
+DoubleType
+
+
+schema = StructType(
+[
+StructField("invoice_no", StringType()),
+StructField("stock_code", StringType()),
+StructField("quantity", IntegerType()),
+StructField("price", DoubleType()),
+]
+)
+jsonDf = dfDeserialized.withColumn("value", from_json("value", schema))\
+.select(col('value.*'))
+query = jsonDf.writeStream.outputMode("append").format("console").start()
+
+query.stop()
+
+import time
+time.sleep(30) # seconds
+query.stop()
+qtyGT5 = jsonDf.filter(" quantity > 5 ")
+
+numberOfSalesDf = jsonDf.groupBy("stock_code").count()
+query =
+numberOfSalesDf.writeStream.outputMode("complete").format("console").start()
